@@ -18,12 +18,12 @@ class SOM:
         state_image = Image.Image(two_d_array=state_array)
         if not self.been_trained:
             self.been_trained = True
-            best_height = self.height / 2
-            best_width = self.width / 2
+            best_height = int(self.height / 2)
+            best_width = int(self.width / 2)
             self.get(best_height,best_width)
             return best_width, best_height
         else:
-            best_w, best_h = self.find_coord(state_array)
+            best_w, best_h = self.find_coord(state_image)
             neighbor_triples = self.get_neighbors(best_w,best_h)
             for neighbor_triple in neighbor_triples:
                 ##  triple of (w, h, rate)

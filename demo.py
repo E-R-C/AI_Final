@@ -37,12 +37,14 @@ def main():
     # init environment
     env = gym.make('internet.SlitherIO-v0')
     env.configure(remotes=1)
-    SOM_WIDTH = 20
-    SOM_HEIGHT = 20
+    SOM_WIDTH = 1
+    SOM_HEIGHT = 1
     SOM_IMAGE_WIDTH = 1024
     SOM_IMAGE_HEIGHT = 768
     RADIUS = 3
+    print("Started som creation")
     som = SOM.SOM(SOM_WIDTH,SOM_HEIGHT,SOM_IMAGE_WIDTH,SOM_IMAGE_HEIGHT, RADIUS, learning_rate=1)
+    print("Finished som creation")
     observation_n = env.reset()
 
 
