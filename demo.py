@@ -39,6 +39,7 @@ def main():
     env.configure(remotes=1)
     SOM_WIDTH = 1
     SOM_HEIGHT = 1
+
     SOM_IMAGE_WIDTH = 1024
     SOM_IMAGE_HEIGHT = 768
     RADIUS = 3
