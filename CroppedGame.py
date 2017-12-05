@@ -16,7 +16,7 @@ def main():
     top_left_x = 20
     top_left_y = 85
     bottom_right_x = 520
-    bottom_right_y = 384
+    bottom_right_y = 385
 
 
     ## Define Actions on keyboard
