@@ -53,8 +53,10 @@ class QLearner():
     def update_qtable(self, action, prev_state_w, prev_state_h, state_w, state_h, prev_reward):
         action_i = self.action_list.index(action)
         learning_rate = 1.0 / (1 + (self.times_chosen[prev_state_w][prev_state_h][action_i]) / self.learning_rate_constant) # higher the constant, higher the learning rate
-        self.q_table[prev_state_w][prev_state_h][action_i] = (1.0 - learning_rate) * self.q_table[prev_state_w][prev_state_h][action_i] + learning_rate * (self.discount_factor *
-                                                                                                                                               self.max_reward(state_w, state_h) + prev_reward)
+        self.q_table[prev_state_w][prev_state_h][action_i] = (1.0 - learning_rate) * \
+                                                             self.q_table[prev_state_w][prev_state_h][action_i] + \
+                                                             learning_rate * (self.discount_factor *
+                                                                              self.max_reward(state_w, state_h) + prev_reward)
         self.times_chosen[prev_state_w][prev_state_h][action_i] += 1
 
         self.random_threshold *= self.decay_rate
