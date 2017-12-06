@@ -8,6 +8,7 @@ import math
 import scipy.misc
 import random
 # track reward probably
+import SOM
 
 class QLearner():
 
@@ -49,11 +50,13 @@ class QLearner():
         return self.action_list[saved_index]
 
 
-    def update_qtable(self, prev_state_w, prev_state_h, state_w, state_h, prev_action, prev_reward):
-        action_i = self.action_list.index(prev_action)
+    def update_qtable(self, action, prev_state_w, prev_state_h, state_w, state_h, prev_reward):
+        action_i = self.action_list.index(action)
         learning_rate = 1.0 / (1 + (self.times_chosen[prev_state_w][prev_state_h][action_i]) / self.learning_rate_constant) # higher the constant, higher the learning rate
-        self.q_table[prev_state_w][prev_state_h][action_i] = (1 - learning_rate) * self.q_table[prev_state_w][prev_state_h] + learning_rate * (self.discount_factor *
+        self.q_table[prev_state_w][prev_state_h][action_i] = (1.0 - learning_rate) * self.q_table[prev_state_w][prev_state_h][action_i] + learning_rate * (self.discount_factor *
                                                                                                                                                self.max_reward(state_w, state_h) + prev_reward)
+        self.times_chosen[prev_state_w][prev_state_h][action_i] += 1
+
         self.random_threshold *= self.decay_rate
 
     def max_reward(self, state_w, state_h):
@@ -93,9 +96,9 @@ def main():
 
 
     action = still
-    prev_action = still
-    state = 0
-    prev_state = 0
+    state_w = 0
+    prev_state_w = None
+    prev_state_h = None
 
     while True:
 
@@ -107,21 +110,26 @@ def main():
 
             action_n = [action for ob in observation_n]
             image_for_som = process_image(observation_n[0]["vision"], tiny_image_w, tiny_image_h)
-            state_x, state_y = som.train(image_for_som)
-            action = q_learner.select_action(state_x, state_y)
-            q_learner.update_qtable(prev_action, action, prev_state, state, reward_n[0])
-            prev_action = action
-            prev_state = state
-            print('reward: ' + reward_n[0])
+            state_w, state_h = som.train(image_for_som)
+            if prev_state_w == None:
+                prev_state_w = state_w
+                prev_state_h = state_h
+                action = q_learner.select_action(state_w, state_h)
+            else:
+                q_learner.update_qtable(action, prev_state_w, prev_state_h, state_w, state_h, reward_n[0])
+                action = q_learner.select_action(state_w, state_h)
+                prev_state_w = state_w
+                prev_state_h = state_h
+            print('reward: ' + str(reward_n[0]))
 
         else:
             # do stuff with death here
-            action_n = [default_action_n for ob in observation_n]
+            action_n = [still for ob in observation_n]
 
         observation_n, reward_n, done_n, info = env.step(action_n)
         env.render()
 
-def process_image(observation, tiny_image_h, tiny_image_w):
+def process_image(observation, tiny_image_w, tiny_image_h):
     top_left_x = 20
     top_left_y = 85
     bottom_right_x = 520
@@ -173,3 +181,5 @@ def supress(x, fs):
         dist = math.sqrt(distx * distx + disty * disty)
         if (f.size > x.size) and (dist < f.size / 2):
             return True
+
+main()
