@@ -5,7 +5,7 @@ import numpy as np
 
 class SOM:
     # Default image size 1024x768
-    def __init__(self, width, height, image_width, image_height, radius, learning_rate=0.9):
+    def __init__(self, width, height, image_width, image_height, radius, learning_rate=0.9, decay_rate=0.9):
         self.width = width
         self.height = height
         self.radius = radius
@@ -14,6 +14,7 @@ class SOM:
         self.image_height = image_height
         self.SOMArray = [[Image.Image(image_width,image_height) for j in range(height)] for i in range(width)]
         self.weight_array = [[learning_rate for _ in range(height)] for _ in range(width)]
+        self.decay_rate = decay_rate
         self.been_trained = False
 
     # Pass in the observation_n[0]["vision"] array
@@ -36,13 +37,13 @@ class SOM:
     def apply_array_to_coordinate(self, new_image, w, h, weight):
         image = self.get(w,h)
         image.apply_image(new_image,weight)
-        # self.weight_array[w][h] *= self.decay_rate
+        self.weight_array[w][h] *= self.decay_rate
 
     ## Returns a triple of neighbors (w, h, rate)
     def get_neighbors(self, w, h):
         neighbors = []
         for i in range(self.radius):
-            rate = self.learning_rate / (i + 1)
+            rate = (self.learning_rate / (i + 1)) * self.weight_array[w][h]
             neighbors += self.get_neighbors_x_away(w,h,i + 1,rate)
         return neighbors
 
