@@ -7,6 +7,9 @@ import universe
 import math
 import scipy.misc
 import random
+import queue
+import time
+
 # track reward probably
 import SOM
 
@@ -63,6 +66,10 @@ class QLearner():
     def max_reward(self, state_w, state_h):
         return max(self.q_table[state_w][state_h])
 
+
+def shorten_buffers_to_one(list_of_queues):
+    for buffer_i in range(len(list_of_queues)):
+        list_of_queues[buffer_i] = queue.Queue(2)
 def main():
     # setup
     env = gym.make('internet.SlitherIO-v0')
@@ -70,56 +77,73 @@ def main():
     observation_n = env.reset()
 
 
-    tiny_image_h = 12
-    tiny_image_w = 18  # for tiny image
-    SOM_WIDTH = 10
-    SOM_HEIGHT = 10
+    tiny_image_h = 20
+    tiny_image_w = 30  # for tiny image
+    SOM_WIDTH = 9
+    SOM_HEIGHT = 9
     buffer_threshold = 10
     som = SOM.SOM(SOM_WIDTH, SOM_HEIGHT, tiny_image_w, tiny_image_h, learning_rate=1, decay_rate=.95, radius=3)
+    # time_to_switch_to_live = 180
+    # live_bool = False
 
     ## Define Actions on keyboard
-    possible_actions = []
-    left_boost = [('KeyEvent', 'ArrowUp', True), ('KeyEvent', 'ArrowLeft', True), ('KeyEvent', 'ArrowRight', False)]
-    left = [('KeyEvent', 'ArrowUp', False), ('KeyEvent', 'ArrowLeft', True), ('KeyEvent', 'ArrowRight', False)]
-    right = [('KeyEvent', 'ArrowUp', False), ('KeyEvent', 'ArrowLeft', False), ('KeyEvent', 'ArrowRight', True)]
-    right_boost = [('KeyEvent', 'ArrowUp', True), ('KeyEvent', 'ArrowLeft', False), ('KeyEvent', 'ArrowRight', True)]
-    forward = [('KeyEvent', 'ArrowUp', True), ('KeyEvent', 'ArrowLeft', False), ('KeyEvent', 'ArrowRight', False)]
-    still = [('KeyEvent', 'ArrowUp', False), ('KeyEvent', 'ArrowLeft', False), ('KeyEvent', 'ArrowRight', False)]
-    possible_actions.append(still)
-    possible_actions.append(forward)
-    possible_actions.append(left)
-    possible_actions.append(right)
-    possible_actions.append(right_boost)
-    possible_actions.append(left_boost)
-    default_action_n = [still for ob in observation_n]
-    bad_actions = [left_boost, right_boost, forward]
+    left = [universe.spaces.PointerEvent(30,240,0)]
+    right = [universe.spaces.PointerEvent(515, 240, 0)]
+    up = [universe.spaces.PointerEvent(275, 95, 0)]
+    down = [universe.spaces.PointerEvent(275,380,0)]
+    boost_left = [universe.spaces.PointerEvent(30, 240, 1)]
+    boost_right = [universe.spaces.PointerEvent(515, 240, 1)]
+    boost_up = [universe.spaces.PointerEvent(275, 95, 1)]
+    boost_down = [universe.spaces.PointerEvent(275, 380, 1)]
+
+
+    # left_boost = [('KeyEvent', 'ArrowUp', True), ('KeyEvent', 'ArrowLeft', True), ('KeyEvent', 'ArrowRight', False)]
+    # left = [('KeyEvent', 'ArrowUp', False), ('KeyEvent', 'ArrowLeft', True), ('KeyEvent', 'ArrowRight', False)]
+    # right = [('KeyEvent', 'ArrowUp', False), ('KeyEvent', 'ArrowLeft', False), ('KeyEvent', 'ArrowRight', True)]
+    # right_boost = [('KeyEvent', 'ArrowUp', True), ('KeyEvent', 'ArrowLeft', False), ('KeyEvent', 'ArrowRight', True)]
+    # forward = [('KeyEvent', 'ArrowUp', True), ('KeyEvent', 'ArrowLeft', False), ('KeyEvent', 'ArrowRight', False)]
+    # still = [('KeyEvent', 'ArrowUp', False), ('KeyEvent', 'ArrowLeft', False), ('KeyEvent', 'ArrowRight', False)]
+    # possible_actions.append(still)
+    # possible_actions.append(forward)
+    possible_actions = [left, right, up, down, boost_down, boost_right, boost_up, boost_left]
+    bad_actions = [boost_right, boost_left, boost_up, boost_left]
+    # possible_actions.append(right_boost)
+    # possible_actions.append(left_boost)
+    # bad_actions = [left_boost, right_boost, forward]
 
     q_learner = QLearner(SOM_WIDTH, SOM_HEIGHT, possible_actions)
 
-    frame_buffer = []
-    action_buffer = []
-    rewards_buffer = []
+    frame_buffer = queue.Queue(buffer_threshold * 2)
+    action_buffer =queue.Queue(buffer_threshold * 2)
+    rewards_buffer = queue.Queue(buffer_threshold * 2)
+    list_of_buffers = [frame_buffer,action_buffer,rewards_buffer]
 
     trials = []
     reward_total = 0.0
 
-    action = still
+    action = up
     state_w = 0
     prev_state_w = None
     prev_state_h = None
     last_image = None
+    start_time = time.time()
     while True:
 
         if observation_n[0] != None :
+            # if time.time() - start_time > time_to_switch_to_live and not live_bool:
+            #     live_bool = True
+            #     shorten_buffers_to_one(list_of_buffers)
+            #     buffer_threshold = 1
+
             if info['n'][0]["env_status.env_state"] == "running" and reward_n[0] is not None:
-                frame_buffer.append(crop(observation_n[0]["vision"]))
-                action_buffer.append(action)
-                rewards_buffer.append(reward_n[0])
+                frame_buffer.put_nowait(crop(observation_n[0]["vision"]))
+                action_buffer.put_nowait(action)
+                rewards_buffer.put_nowait(reward_n[0])
                 reward_total += reward_n[0]
-                if len(frame_buffer) > buffer_threshold:
-                    current_frame = frame_buffer.pop(0)
-                    current_action = action_buffer.pop(0)
-                    current_reward = rewards_buffer.pop(0)
+                if frame_buffer.qsize() > buffer_threshold:
+                    current_frame = frame_buffer.get_nowait()
+                    current_action = action_buffer.get_nowait()
+                    current_reward = rewards_buffer.get_nowait()
                     action_n = [action for ob in observation_n]
                     last_image = current_frame
                     image_for_som = process_image(last_image, tiny_image_w, tiny_image_h)
@@ -129,7 +153,10 @@ def main():
                         prev_state_h = state_h
                         action = q_learner.select_action(state_w, state_h)
                     else:
-                        default_reward = 5 + reward_n[0]
+                        if current_action in bad_actions:
+                            default_reward = reward_n[0]
+                        else:
+                            default_reward = 5 + reward_n[0]
                         '''if current_action in bad_actions:
                             if current_reward < 0:
                                 default_reward = current_reward
@@ -139,17 +166,16 @@ def main():
                         action = q_learner.select_action(state_w, state_h)
                         prev_state_w = state_w
                         prev_state_h = state_h
-                    cv2.imshow("Frame Training", last_image)
-
+                    cv2.imshow("Frame Training", cv2.cvtColor(last_image,cv2.COLOR_RGB2BGR))
             else:
                 # do stuff with death here
                 if reward_total > 0.0:
                     trials.append(reward_total)
                     print(trials)
-                if len(frame_buffer) > 0:
-                    current_frame = frame_buffer.pop(0)
-                    current_action = action_buffer.pop(0)
-                    current_reward = rewards_buffer.pop(0)
+                if frame_buffer.qsize() > 0:
+                    current_frame = frame_buffer.get_nowait()
+                    current_action = action_buffer.get_nowait()
+                    current_reward = rewards_buffer.get_nowait()
                     last_image = current_frame
                     image_for_som = process_image(last_image, tiny_image_w, tiny_image_h)
                     state_w, state_h = som.train(image_for_som)
@@ -158,9 +184,9 @@ def main():
                     action = q_learner.select_action(state_w, state_h)
                     prev_state_w = state_w
                     prev_state_h = state_h
-                    cv2.imshow("Frame Training", last_image)
+                    cv2.imshow("Frame Training", cv2.cvtColor(last_image, cv2.COLOR_RGB2BGR))
         else:
-            action_n = [still for ob in observation_n]
+            action_n = [up for ob in observation_n]
         observation_n, reward_n, done_n, info = env.step(action_n)
         # print(done_n)
 
@@ -259,6 +285,7 @@ def fill_orbs(orig):
                 big = ma
                 small = MA
             if small / big > .7 and (math.pi * MA * ma <= 200 and math.pi * MA * ma >= 20):
+                ellipse = ((x,y),(MA * 4,ma * 4),angle)
                 cv2.ellipse(bw_image, ellipse, (255, 0, 0), cv2.FILLED)
                 cv2.ellipse(img, ellipse, (0, 0, 255), 2)
     return bw_image

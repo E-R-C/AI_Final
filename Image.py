@@ -17,11 +17,14 @@ class Image:
             # print(np.transpose(two_d_array, (1,0,2)).shape)
             self.array = np.transpose(two_d_array, (1,0,2))
 
-
         else:
             self.width = width
             self.height = height
+            green_square = [0,255,0]
+            black_square = [0,0,0]
+            # self.array = [[random.choice([green_square,black_square,black_square]) for _ in range(height)] for _ in range(width)]
             self.array = [[[random.randint(0,255),random.randint(0,255),random.randint(0,255)] for _ in range(height)] for _ in range(width)]
+
 
     def calculate_dist(self, image2):
         sum = 0

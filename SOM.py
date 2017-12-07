@@ -17,6 +17,7 @@ class SOM:
         self.decay_rate = decay_rate
         self.been_trained = False
 
+
     # Pass in the observation_n[0]["vision"] array
     def train(self, state_array):
         state_image = Image.Image(two_d_array=state_array)
@@ -25,6 +26,10 @@ class SOM:
             best_height = int(self.height / 2)
             best_width = int(self.width / 2)
             self.get(best_height,best_width)
+            neighbor_triples = self.get_neighbors(best_width, best_height)
+            for neighbor_triple in neighbor_triples:
+                ##  triple of (w, h, rate)
+                self.apply_array_to_coordinate(state_image, neighbor_triple[0], neighbor_triple[1], neighbor_triple[2])
             return best_width, best_height
         else:
             best_w, best_h = self.find_coord(state_image)
