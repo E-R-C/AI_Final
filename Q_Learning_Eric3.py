@@ -15,7 +15,7 @@ import SOM
 
 class QLearner():
 
-    def __init__(self, width, height, action_list, random_threshold=1.0, exploration_threshold=60, decay_rate=.95, learning_rate_constant=10.0, random_floor=0.05):
+    def __init__(self, width, height, action_list, random_threshold=1.0, exploration_threshold=60, decay_rate=.95, learning_rate_constant=10.0, random_floor=0.05, learning_floor=0.1):
         self.width = width
         self.height = height
         self.action_list = action_list
@@ -30,6 +30,7 @@ class QLearner():
         self.learning_rate = 1.0
         self.discount_factor = .5
         self.times_chosen = [[[0 for q in range(len(action_list))] for i in range(height)] for j in range(width)]
+        self.learning_floor = learning_floor
 
     def select_action(self, x, y):
         saved_index = 0
@@ -51,7 +52,12 @@ class QLearner():
 
     def update_qtable(self, action, prev_state_w, prev_state_h, state_w, state_h, prev_reward):
         action_i = self.action_list.index(action)
-        learning_rate = 1.0 / (1 + (self.times_chosen[prev_state_w][prev_state_h][action_i]) / self.learning_rate_constant) # higher the constant, higher the learning rate
+        learn_amount = 1.0 / (1 + (self.times_chosen[prev_state_w][prev_state_h][action_i]) / self.learning_rate_constant)
+        if learn_amount < self.learning_floor:
+            learning_rate = self.learning_floor
+        else:
+            learning_rate = learn_amount
+        # learning_rate = 1.0 / (1 + (self.times_chosen[prev_state_w][prev_state_h][action_i]) / self.learning_rate_constant) # higher the constant, higher the learning rate
         self.q_table[prev_state_w][prev_state_h][action_i] = (1.0 - learning_rate) * \
                                                              self.q_table[prev_state_w][prev_state_h][action_i] + \
                                                              learning_rate * (self.discount_factor *
@@ -127,6 +133,8 @@ def main():
     prev_state_h = None
     last_image = None
     start_time = time.time()
+    reward = 0
+    reward_decay = 0.8
     while True:
 
         if observation_n[0] != None :
@@ -153,10 +161,13 @@ def main():
                         prev_state_h = state_h
                         action = q_learner.select_action(state_w, state_h)
                     else:
-                        if current_action in bad_actions:
-                            default_reward = reward_n[0]
-                        else:
-                            default_reward = 5 + reward_n[0]
+                        reward *= reward_decay
+                        reward += reward_n[0]
+                        default_reward = reward
+                        # if current_action in bad_actions:
+                        #     default_reward = reward_n[0]
+                        # else:
+                        #     default_reward = 5 + reward_n[0]
                         '''if current_action in bad_actions:
                             if current_reward < 0:
                                 default_reward = current_reward
