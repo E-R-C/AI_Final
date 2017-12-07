@@ -15,7 +15,7 @@ import SOM
 
 class QLearner():
 
-    def __init__(self, width, height, action_list, random_threshold=1.0, exploration_threshold=60, decay_rate=.95, learning_rate_constant=10.0, random_floor=0.05):
+    def __init__(self, width, height, action_list, random_threshold=1.0, exploration_threshold=60, decay_rate=.95, learning_rate_constant=10.0, random_floor=0.05, learning_floor=0.1):
         self.width = width
         self.height = height
         self.action_list = action_list
@@ -30,6 +30,7 @@ class QLearner():
         self.learning_rate = 1.0
         self.discount_factor = .5
         self.times_chosen = [[[0 for q in range(len(action_list))] for i in range(height)] for j in range(width)]
+        self.learning_floor = learning_floor
 
     def select_action(self, x, y):
         saved_index = 0
@@ -51,7 +52,12 @@ class QLearner():
 
     def update_qtable(self, action, prev_state_w, prev_state_h, state_w, state_h, prev_reward):
         action_i = self.action_list.index(action)
-        learning_rate = 1.0 / (1 + (self.times_chosen[prev_state_w][prev_state_h][action_i]) / self.learning_rate_constant) # higher the constant, higher the learning rate
+        learn_amount = 1.0 / (1 + (self.times_chosen[prev_state_w][prev_state_h][action_i]) / self.learning_rate_constant)
+        if learn_amount < self.learning_floor:
+            learning_rate = self.learning_floor
+        else:
+            learning_rate = learn_amount
+        # learning_rate = 1.0 / (1 + (self.times_chosen[prev_state_w][prev_state_h][action_i]) / self.learning_rate_constant) # higher the constant, higher the learning rate
         self.q_table[prev_state_w][prev_state_h][action_i] = (1.0 - learning_rate) * \
                                                              self.q_table[prev_state_w][prev_state_h][action_i] + \
                                                              learning_rate * (self.discount_factor *
@@ -146,16 +152,17 @@ def main():
                     current_reward = rewards_buffer.get_nowait()
                     action_n = [action for ob in observation_n]
                     last_image = current_frame
-                    # add here
-                    image_for_som, snake_dist = process_image(last_image, tiny_image_w, tiny_image_h)
+                    image_for_som = process_image(last_image, tiny_image_w, tiny_image_h)
                     state_w, state_h = som.train(image_for_som)
                     if prev_state_w is None:
                         prev_state_w = state_w
                         prev_state_h = state_h
                         action = q_learner.select_action(state_w, state_h)
                     else:
-                        # add here
-                        default_reward = 5 + reward_n[0] + (50.0 / ((snake_dist + 1.0) * -1.0))
+                        if current_action in bad_actions:
+                            default_reward = reward_n[0]
+                        else:
+                            default_reward = 5 + reward_n[0]
                         '''if current_action in bad_actions:
                             if current_reward < 0:
                                 default_reward = current_reward
@@ -176,8 +183,7 @@ def main():
                     current_action = action_buffer.get_nowait()
                     current_reward = rewards_buffer.get_nowait()
                     last_image = current_frame
-                    # add here
-                    image_for_som, snake_dist = process_image(last_image, tiny_image_w, tiny_image_h)
+                    image_for_som = process_image(last_image, tiny_image_w, tiny_image_h)
                     state_w, state_h = som.train(image_for_som)
                     # The following assumes that prev_state has been defined
                     q_learner.update_qtable(current_action, prev_state_w, prev_state_h, state_w, state_h, -500)
@@ -234,13 +240,11 @@ def process_image(observation, tiny_image_w, tiny_image_h):
     shrunken_image = scipy.misc.imresize(grayscale, 0.5, "nearest")
 
     filled_orbs = cv2.cvtColor(filled_orbs, cv2.COLOR_RGB2BGR)
-    #
+    # shrunken_image = cv2.cvtColor(shrunken_image,
 
-    # add here
-    tiny, snake_dist = fill_snake(shrunken_image, filled_orbs)
 
-    tiny = cv2.resize(tiny, (tiny_image_w, tiny_image_h))
-    return tiny, snake_dist
+    tiny = cv2.resize(fill_snake(shrunken_image, filled_orbs), (tiny_image_w, tiny_image_h))
+    return tiny
 
 def crop_photo(array,top_left_x, top_left_y, bottom_right_x, bottom_right_y):
     return array[top_left_y:bottom_right_y,top_left_x:bottom_right_x]
@@ -250,26 +254,11 @@ def fill_snake(orig, to_draw):
     img = cv2.medianBlur(img, 5)
     ret, img = cv2.threshold(img, 60, 255, cv2.THRESH_BINARY)
     ret, contour, hier = cv2.findContours(img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
-    total_distance = 0.0
 
     for cnt in contour:
-        if len(cnt) >= 5:
-            ellipse = cv2.fitEllipse(cnt)
-            (x, y), (MA, ma), angle = ellipse
-            big = 0.0
-            small = 0.0
-            if MA > ma:
-                big = MA
-                small = ma
-            else:
-                big = ma
-                small = MA
-            if small / big <= .7 and (math.pi * MA * ma >= 20) and (not supress(cnt, contour)):
-                cv2.ellipse(to_draw, ellipse, (255, 0, 0), cv2.FILLED)
-                #cv2.ellipse(img, ellipse, (0, 0, 255), 2)
-        #cv2.drawContours(to_draw, [cnt], 0, 255, -1)
+        cv2.drawContours(img, [cnt], 0, 255, -1)
 
-    '''detector = cv2.MSER_create()
+    detector = cv2.MSER_create()
     fs = detector.detect(img)
     fs.sort(key=lambda x: -x.size)
     sfs = [x for x in fs if not supress(x, fs)]
@@ -278,17 +267,9 @@ def fill_snake(orig, to_draw):
 
     for f in sfs:
         cv2.circle(to_draw, (int(f.pt[0]), int(f.pt[1])), int(f.size / 2), (0, 255, 0), cv2.FILLED)
-        # add here
-        p1, p2 = orig.shape
-        p1 = p1 / 2.0
-        p2 = p2 / 2.0
-        total_distance += (math.pow((p1 - f.pt[0]), 2) + math.pow((p2 - f.pt[1]), 2))'''
-
-
     cv2.imshow("binary", img)
     cv2.imshow("contours", to_draw)
-    # add here
-    return to_draw, (total_distance / 1)
+    return to_draw
 
 def fill_orbs(orig):
     img = orig.copy()
