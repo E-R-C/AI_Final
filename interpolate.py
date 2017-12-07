@@ -49,30 +49,69 @@ def supress(x):
 			print(str(x.pt[0]) + " " + str(x.pt[1]))
 			return True
 
+def supress_snakes(x):
+	for f in fs:
+		distx = f.pt[0] - x.pt[0]
+		disty = f.pt[1] - x.pt[1]
+		dist = math.sqrt(distx * distx + disty * disty)
+		if (f.size > x.size) and (dist < f.size / 2):
+			print(str(x.pt[0]) + " " + str(x.pt[1]))
+			return True
+
+
 
 def fill_contour(orig):
 	img = orig.copy()
 	img2 = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 	img2 = cv2.medianBlur(img2, 5)
-	ret, img2 = cv2.threshold(img2, 60, 255, cv2.THRESH_BINARY)
+	ret, img2 = cv2.threshold(img2, 65, 255, cv2.THRESH_BINARY)
+	h, w, ret = img.shape
+	bw_image = np.zeros((h, w, 3), np.uint8)
 
 	# des = cv2.bitwise_not(img2)
 	ret, contour, hier = cv2.findContours(img2, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
 
 	for cnt in contour:
-		cv2.drawContours(img2, [cnt], 0, 255, -1)
+		if len(cnt) >= 5:
+			cv2.drawContours(img2, [cnt], 0, 255, -1)
+			ellipse = cv2.fitEllipse(cnt)
+
+			(x, y), (MA, ma), angle = ellipse
 
 
-	return img2
+			box = cv2.boxPoints(ellipse)
+			box = np.int0(box)
+			#if (box[])
+			print(ma, MA)
+			big = 0.0
+			small = 0.0
+			if MA > ma:
+				big = MA
+				small = ma
+			else:
+				big = ma
+				small = MA
+			if small / big > .8:
+
+				cv2.ellipse(bw_image, ellipse, (255, 0, 0), cv2.FILLED)
+				cv2.ellipse(img, ellipse, (0, 0, 255), 2)
+		#cv2.drawContours(img, [box], 0, (0, 0, 255), cv2.FILLED)
+
+	#kernel = np.ones((6, 6), np.uint8)
+	#erosion = cv2.erode(img2, kernel, iterations=1)
+	cv2.imshow('im', img)
+	cv2.waitKey()
+
+	return bw_image
 
 orig = cv2.imread("USE3.png")
-orig = cv2.resize(orig, (0, 0), fx=0.5, fy=0.5)
-img = fill_contour(orig)
-
+#orig = cv2.resize(orig, (0, 0), fx=0.2, fy=0.2)
+img, orig = fill_contour(orig.copy())
+#img = cv2.cvtColor(orig, cv2.COLOR_BGR2GRAY)
 detector = cv2.MSER_create()
 fs = detector.detect(img)
 fs.sort(key=lambda x: -x.size)
-sfs = [x for x in fs if not supress(x)]
+sfs = [x for x in fs if supress_snakes(x)]
 #snakes = [[0 for i in range(5)] for j in range(5)]
 h, w, ret = orig.shape
 final_img = np.zeros((h, w, 3), np.uint8)
@@ -83,16 +122,17 @@ for f in sfs:
 	new_y = f.pt[1] / 5.0 / orig.size'''
 #	print(f.)
 
-	cv2.circle(final_img, (int(f.pt[0]), int(f.pt[1])), int(f.size / 2), (0, 255, 0), cv2.FILLED)
+	cv2.circle(final_img, (int(f.pt[0]), int(f.pt[1])), int(f.size / 2), (0, 255, 0), 2)
 
 
 
 #hulls = [cv2.convexHull(p.reshape(-1, 1, 2)) for p in sfs]
 #cv2.polylines(vis, hulls, 1, (0, 255, 0))
-cv2.imshow('img', final_img)
-
-final_img = cv2.resize(final_img, (0, 0), fx=.2, fy=.2)
-cv2.imshow('img', final_img)
+cv2.imshow('img', orig)
+cv2.imshow('img2', img)
+cv2.imshow('final', final_img)
+#final_img2 = cv2.resize(final_img, (0, 0), fx=.2, fy=.2)
+#cv2.imshow('img', final_img2)
 
 cv2.waitKey()
 #for f in sfs:

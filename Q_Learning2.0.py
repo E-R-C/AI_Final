@@ -113,6 +113,7 @@ def main():
             action_n = [action for ob in observation_n]
             image_for_som = process_image(observation_n[0]["vision"], tiny_image_w, tiny_image_h)
             state_w, state_h = som.train(image_for_som)
+            print_som(som)
             if prev_state_w == None:
                 prev_state_w = state_w
                 prev_state_h = state_h
@@ -138,17 +139,29 @@ def process_image(observation, tiny_image_w, tiny_image_h):
     bottom_right_y = 385
     photo_array = crop_photo(observation, top_left_x, top_left_y, bottom_right_x,
                              bottom_right_y)
-    shrunken_image = scipy.misc.imresize(photo_array, 0.5, "nearest")
-    shrunken_image = cv2.cvtColor(shrunken_image, cv2.COLOR_RGB2BGR)
-    shrunken_image2 = cv2.cvtColor(shrunken_image, cv2.COLOR_BGR2GRAY)
 
-    tiny = cv2.resize(fill_contour(shrunken_image2), (tiny_image_w, tiny_image_h))
+    bgr = cv2.cvtColor(photo_array, cv2.COLOR_RGB2BGR)
+
+    grayscale = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    filled_orbs = fill_orbs(grayscale)
+
+    # filled_orbs = cv2.resize(filled_orbs, (0,0), fx=.5, fy=.5)
+    # shrunken_image = cv2.resize(grayscale, (0, 0), fx=.5, fy=.5)
+
+    filled_orbs = scipy.misc.imresize(filled_orbs, 0.5, "nearest")
+    shrunken_image = scipy.misc.imresize(grayscale, 0.5, "nearest")
+
+    filled_orbs = cv2.cvtColor(filled_orbs, cv2.COLOR_RGB2BGR)
+    #shrunken_image = cv2.cvtColor(shrunken_image,
+
+
+    tiny = cv2.resize(fill_snake(shrunken_image, filled_orbs), (tiny_image_w, tiny_image_h))
     return tiny
 
 def crop_photo(array,top_left_x, top_left_y, bottom_right_x, bottom_right_y):
     return array[top_left_y:bottom_right_y,top_left_x:bottom_right_x]
 
-def fill_contour(orig):
+def fill_snake(orig, to_draw):
     img = orig.copy()
     img = cv2.medianBlur(img, 5)
     ret, img = cv2.threshold(img, 60, 255, cv2.THRESH_BINARY)
@@ -165,10 +178,35 @@ def fill_contour(orig):
     final_img = np.zeros((h, w, 3), np.uint8)
 
     for f in sfs:
-        cv2.circle(final_img, (int(f.pt[0]), int(f.pt[1])), int(f.size / 2), (0, 255, 0), cv2.FILLED)
-    #cv2.imshow("binary", img2)
-    #cv2.imshow("contours", final_img)
-    return final_img
+        cv2.circle(to_draw, (int(f.pt[0]), int(f.pt[1])), int(f.size / 2), (0, 255, 0), cv2.FILLED)
+    cv2.imshow("binary", img)
+    cv2.imshow("contours", to_draw)
+    return to_draw
+
+def fill_orbs(orig):
+    img = orig.copy()
+    img2 = cv2.medianBlur(img, 5)
+    ret, img2 = cv2.threshold(img2, 63, 255, cv2.THRESH_BINARY)
+    h, w = img2.shape
+    bw_image = np.zeros((h, w, 3), np.uint8)
+    ret, contour, hier = cv2.findContours(img2, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+    for cnt in contour:
+        if len(cnt) >= 5:
+            ellipse = cv2.fitEllipse(cnt)
+            (x, y), (MA, ma), angle = ellipse
+            big = 0.0
+            small = 0.0
+            if MA > ma:
+                big = MA
+                small = ma
+            else:
+                big = ma
+                small = MA
+            if small / big > .7 and (math.pi * MA * ma <= 200 and math.pi * MA * ma >= 20):
+                cv2.ellipse(bw_image, ellipse, (255, 0, 0), cv2.FILLED)
+                cv2.ellipse(img, ellipse, (0, 0, 255), 2)
+    return bw_image
+
 
 def supress(x, fs):
     # leaderboard
@@ -183,5 +221,29 @@ def supress(x, fs):
         dist = math.sqrt(distx * distx + disty * disty)
         if (f.size > x.size) and (dist < f.size / 2):
             return True
+
+def supress_snakes(x, fs):
+    for f in fs:
+        distx = f.pt[0] - x.pt[0]
+        disty = f.pt[1] - x.pt[1]
+        dist = math.sqrt(distx * distx + disty * disty)
+        if (f.size > x.size) and (dist < f.size / 2):
+            return True
+
+
+def print_som(som):
+    columns = []
+    for w in range(som.width):
+        array = []
+        for h in range(som.height):
+            array.append(som.get(w,h).array)
+        column = np.vstack(array)
+        columns.append(column)
+    actual_array = np.hstack(columns)
+    # print(actual_array)
+
+    cv2.imshow("SOM.jpg", actual_array)
+    # cv2.waitKey(1)
+
 
 main()
