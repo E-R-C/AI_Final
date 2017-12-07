@@ -100,6 +100,8 @@ def main():
     action_buffer = []
     rewards_buffer = []
 
+    trials = []
+    reward_total = 0.0
 
     action = still
     state_w = 0
@@ -113,6 +115,7 @@ def main():
                 frame_buffer.append(crop(observation_n[0]["vision"]))
                 action_buffer.append(action)
                 rewards_buffer.append(reward_n[0])
+                reward_total += reward_n[0]
                 if len(frame_buffer) > buffer_threshold:
                     current_frame = frame_buffer.pop(0)
                     current_action = action_buffer.pop(0)
@@ -126,32 +129,37 @@ def main():
                         prev_state_h = state_h
                         action = q_learner.select_action(state_w, state_h)
                     else:
-                        default_reward = 1
-                        if current_action in bad_actions:
+                        default_reward = 5 + reward_n[0]
+                        '''if current_action in bad_actions:
                             if current_reward < 0:
                                 default_reward = current_reward
                             else:
-                                default_reward = 0
+                                default_reward = 0'''
                         q_learner.update_qtable(current_action, prev_state_w, prev_state_h, state_w, state_h, default_reward)
                         action = q_learner.select_action(state_w, state_h)
                         prev_state_w = state_w
                         prev_state_h = state_h
                     cv2.imshow("Frame Training", last_image)
+
+            else:
+                # do stuff with death here
+                if reward_total > 0.0:
+                    trials.append(reward_total)
+                    print(trials)
+                if len(frame_buffer) > 0:
+                    current_frame = frame_buffer.pop(0)
+                    current_action = action_buffer.pop(0)
+                    current_reward = rewards_buffer.pop(0)
+                    last_image = current_frame
+                    image_for_som = process_image(last_image, tiny_image_w, tiny_image_h)
+                    state_w, state_h = som.train(image_for_som)
+                    # The following assumes that prev_state has been defined
+                    q_learner.update_qtable(current_action, prev_state_w, prev_state_h, state_w, state_h, -500)
+                    action = q_learner.select_action(state_w, state_h)
+                    prev_state_w = state_w
+                    prev_state_h = state_h
+                    cv2.imshow("Frame Training", last_image)
         else:
-            # do stuff with death here
-            if len(frame_buffer) > 0:
-                current_frame = frame_buffer.pop(0)
-                current_action = action_buffer.pop(0)
-                current_reward = rewards_buffer.pop(0)
-                last_image = current_frame
-                image_for_som = process_image(last_image, tiny_image_w, tiny_image_h)
-                state_w, state_h = som.train(image_for_som)
-                # The following assumes that prev_state has been defined
-                q_learner.update_qtable(current_action, prev_state_w, prev_state_h, state_w, state_h, -500)
-                action = q_learner.select_action(state_w, state_h)
-                prev_state_w = state_w
-                prev_state_h = state_h
-                cv2.imshow("Frame Training", last_image)
             action_n = [still for ob in observation_n]
         observation_n, reward_n, done_n, info = env.step(action_n)
         # print(done_n)
@@ -173,6 +181,7 @@ def print_som(som):
     enlarged_image = scipy.misc.imresize(actual_array,200,"cubic")
     cv2.imshow("SOM.jpg", enlarged_image)
     cv2.waitKey(5)
+
 def crop(observation):
     top_left_x = 20
     top_left_y = 85
@@ -182,16 +191,33 @@ def crop(observation):
                              bottom_right_y)
     return photo_array
 def process_image(observation, tiny_image_w, tiny_image_h):
-    shrunken_image = scipy.misc.imresize(observation, 0.5, "nearest")
-    shrunken_image = cv2.cvtColor(shrunken_image, cv2.COLOR_RGB2BGR)
-    shrunken_image2 = cv2.cvtColor(shrunken_image, cv2.COLOR_BGR2GRAY)
-    tiny = cv2.resize(fill_contour(shrunken_image2), (tiny_image_w, tiny_image_h))
+    # shrunken_image = scipy.misc.imresize(observation, 0.5, "nearest")
+    # shrunken_image = cv2.cvtColor(shrunken_image, cv2.COLOR_RGB2BGR)
+    # shrunken_image2 = cv2.cvtColor(shrunken_image, cv2.COLOR_BGR2GRAY)
+    # tiny = cv2.resize(fill_contour(shrunken_image2), (tiny_image_w, tiny_image_h))
+    # return tiny
+    bgr = cv2.cvtColor(observation, cv2.COLOR_RGB2BGR)
+
+    grayscale = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    filled_orbs = fill_orbs(grayscale)
+
+    # filled_orbs = cv2.resize(filled_orbs, (0,0), fx=.5, fy=.5)
+    # shrunken_image = cv2.resize(grayscale, (0, 0), fx=.5, fy=.5)
+
+    filled_orbs = scipy.misc.imresize(filled_orbs, 0.5, "nearest")
+    shrunken_image = scipy.misc.imresize(grayscale, 0.5, "nearest")
+
+    filled_orbs = cv2.cvtColor(filled_orbs, cv2.COLOR_RGB2BGR)
+    # shrunken_image = cv2.cvtColor(shrunken_image,
+
+
+    tiny = cv2.resize(fill_snake(shrunken_image, filled_orbs), (tiny_image_w, tiny_image_h))
     return tiny
 
 def crop_photo(array,top_left_x, top_left_y, bottom_right_x, bottom_right_y):
     return array[top_left_y:bottom_right_y,top_left_x:bottom_right_x]
 
-def fill_contour(orig):
+def fill_snake(orig, to_draw):
     img = orig.copy()
     img = cv2.medianBlur(img, 5)
     ret, img = cv2.threshold(img, 60, 255, cv2.THRESH_BINARY)
@@ -208,10 +234,34 @@ def fill_contour(orig):
     final_img = np.zeros((h, w, 3), np.uint8)
 
     for f in sfs:
-        cv2.circle(final_img, (int(f.pt[0]), int(f.pt[1])), int(f.size / 2), (0, 255, 0), cv2.FILLED)
-    #cv2.imshow("binary", img2)
-    #cv2.imshow("contours", final_img)
-    return final_img
+        cv2.circle(to_draw, (int(f.pt[0]), int(f.pt[1])), int(f.size / 2), (0, 255, 0), cv2.FILLED)
+    cv2.imshow("binary", img)
+    cv2.imshow("contours", to_draw)
+    return to_draw
+
+def fill_orbs(orig):
+    img = orig.copy()
+    img2 = cv2.medianBlur(img, 5)
+    ret, img2 = cv2.threshold(img2, 63, 255, cv2.THRESH_BINARY)
+    h, w = img2.shape
+    bw_image = np.zeros((h, w, 3), np.uint8)
+    ret, contour, hier = cv2.findContours(img2, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+    for cnt in contour:
+        if len(cnt) >= 5:
+            ellipse = cv2.fitEllipse(cnt)
+            (x, y), (MA, ma), angle = ellipse
+            big = 0.0
+            small = 0.0
+            if MA > ma:
+                big = MA
+                small = ma
+            else:
+                big = ma
+                small = MA
+            if small / big > .7 and (math.pi * MA * ma <= 200 and math.pi * MA * ma >= 20):
+                cv2.ellipse(bw_image, ellipse, (255, 0, 0), cv2.FILLED)
+                cv2.ellipse(img, ellipse, (0, 0, 255), 2)
+    return bw_image
 
 def supress(x, fs):
     # leaderboard
