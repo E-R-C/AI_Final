@@ -264,7 +264,7 @@ def fill_snake(orig, to_draw):
             else:
                 big = ma
                 small = MA
-            if small / big <= .7 and (math.pi * MA * ma >= 20) and (not supress(cnt, contour)):
+            if small / big <= .7 and (math.pi * MA * ma >= 20):
                 cv2.ellipse(to_draw, ellipse, (255, 0, 0), cv2.FILLED)
                 #cv2.ellipse(img, ellipse, (0, 0, 255), 2)
         #cv2.drawContours(to_draw, [cnt], 0, 255, -1)
